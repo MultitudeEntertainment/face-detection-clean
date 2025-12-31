@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Détection Faciale</title>
+  <title>Détection faciale</title>
 
   <style>
     body {
@@ -15,44 +15,70 @@
     }
 
     h1 {
-      margin-top: 20px;
-      z-index: 10;
+      margin: 10px 0;
       position: relative;
+      z-index: 10;
+    }
+
+    #container {
+      position: relative;
+      width: 720px;
+      height: 560px;
+      margin: 0 auto;
+      top: 10px;
     }
 
     #video {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      width: 720px;
+      height: 560px;
+      background: #222;
       z-index: 1;
     }
 
     #canvas {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      top: 0;
+      left: 0;
+      width: 720px;
+      height: 560px;
       z-index: 2;
       pointer-events: none;
+    }
+
+    #status {
+      margin-top: 5px;
+      font-size: 0.9rem;
+      color: #ccc;
     }
   </style>
 </head>
 
 <body>
-  <h1>Détection Faciale</h1>
+  <h1>Détection faciale</h1>
+  <div id="status">Initialisation...</div>
 
-  <video id="video" width="720" height="560" autoplay muted playsinline></video>
-  <canvas id="canvas" width="720" height="560"></canvas>
+  <div id="container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="canvas"></canvas>
+  </div>
 
   <!-- MediaPipe Face Detection -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
+    const statusEl = document.getElementById("status");
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+
+    // Vérifier la dispo de la caméra
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      statusEl.textContent = "getUserMedia non supporté par ce navigateur.";
+    }
 
     // Initialisation du modèle MediaPipe
     const faceDetection = new FaceDetection.FaceDetection({
@@ -61,31 +87,35 @@
     });
 
     faceDetection.setOptions({
-      model: "short", // modèle rapide
-      minDetectionConfidence: 0.5
+      model: "short",              // modèle rapide
+      minDetectionConfidence: 0.5  // confiance minimale
     });
 
-    // Dessin des résultats
     faceDetection.onResults((results) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (!results.detections || results.detections.length === 0) return;
+      if (!results.detections || results.detections.length === 0) {
+        statusEl.textContent = "Aucun visage détecté.";
+        return;
+      }
+
+      statusEl.textContent = `${results.detections.length} visage(s) détecté(s).`;
 
       for (const detection of results.detections) {
         const box = detection.boundingBox;
 
+        const x = box.xCenter - box.width / 2;
+        const y = box.yCenter - box.height / 2;
+        const w = box.width;
+        const h = box.height;
+
         ctx.strokeStyle = "lime";
         ctx.lineWidth = 4;
-        ctx.strokeRect(
-          box.xCenter - box.width / 2,
-          box.yCenter - box.height / 2,
-          box.width,
-          box.height
-        );
+        ctx.strokeRect(x, y, w, h);
       }
     });
 
-    // Activation de la caméra
+    // Caméra MediaPipe
     const camera = new Camera(video, {
       onFrame: async () => {
         await faceDetection.send({ image: video });
@@ -94,7 +124,21 @@
       height: 560
     });
 
-    camera.start();
+    // Démarrage
+    async function start() {
+      try {
+        statusEl.textContent = "Demande d'accès à la caméra...";
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        statusEl.textContent = "Caméra active, détection en cours...";
+        camera.start();
+      } catch (err) {
+        console.error("Erreur caméra :", err);
+        statusEl.textContent = "Caméra bloquée ou inaccessible. Vérifie les permissions.";
+      }
+    }
+
+    start();
   </script>
 </body>
 </html>
